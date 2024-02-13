@@ -283,7 +283,7 @@ class FacilityLocationFunction(SetFunction):
 			self.cpp_sijs['arr_col'] = self.sijs.indices.tolist() #contains col index corrosponding to non-zero values in arr_val
 			if torch.cuda.is_available() :
 					self.cpp_obj = FacilityLocation(self.n, self.cpp_sijs['arr_val'], self.cpp_sijs['arr_count'], self.cpp_sijs['arr_col'])
-				else:
+			else:
 					self.cpp_obj = FacilityLocation(self.n, self.cpp_sijs['arr_val'], self.cpp_sijs['arr_count'], self.cpp_sijs['arr_col'])
 		
 		elif self.mode=="clustered":
@@ -300,7 +300,7 @@ class FacilityLocationFunction(SetFunction):
 
 			if torch.cuda.is_available() :
 					self.cpp_obj = FacilityLocation(self.n, self.clusters, self.cluster_sijs, self.cluster_map)
-				else:
+			else:
 					self.cpp_obj = FacilityLocation(self.n, self.clusters, self.cluster_sijs, self.cluster_map)
 
 		#self.cpp_ground_sub=self.cpp_obj.getEffectiveGroundSet()
