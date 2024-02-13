@@ -5,4 +5,4 @@ from .GraphCut import GraphCutFunction
 from .DisparityMin import DisparityMinFunction
 from .DisparitySum import DisparitySumFunction
 from .FacilityLocation import FacilityLocationFunction
-from .LogDeteminant import LogDeteminantFunction
+from .LogDeterminant import LogDeterminantFunction
