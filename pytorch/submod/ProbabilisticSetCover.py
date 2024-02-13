@@ -2,7 +2,7 @@ import torch
 from typing import List, Set, Tuple
 from ..SetFunction import SetFunction
 
-class ProbabilisticSetCover(SetFunction):
+class ProbabilisticSetCoverFunction(SetFunction):
     def __init__(self, n: int, ground_set_concept_probabilities: List[List[float]], num_concepts: int, concept_weights: List[float] = None):
         super(SetFunction, self).__init__()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
