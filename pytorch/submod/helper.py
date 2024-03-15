@@ -244,22 +244,21 @@ def create_kernel(X, metric, mode="dense", num_neigh=-1, n_jobs=1, X_rep=None, m
     else:
         raise Exception("ERROR: unsupported mode")
 
-
-
 # Euclidean similarity function
 def euclidean_similarity(a: Vector, b: Vector) -> float:
-    return np.linalg.norm(np.array(a) - np.array(b))
+    return torch.cdist(a.unsqueeze(0), a.unsqueeze(0), p=2).squeeze(0)
+
 
 # Cosine similarity function
 def cosine_similarity(a: Vector, b: Vector) -> float:
-    dot_product = np.dot(a, b)
-    norm_a = np.linalg.norm(a)
-    norm_b = np.linalg.norm(b)
+    dot_product = torch.dot(a, b)
+    norm_a = torch.norm(a)
+    norm_b = torch.norm(b)
     return dot_product / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
 
 # Dot product function
-def dot_prod(a: Vector, b: Vector) -> float:
-    return np.dot(a, b)
+def dot_prod(a:Vector, b: Vector) -> float:
+    return torch.dot(a, b)
 
 # Create kernel function for non-square kernel
 def create_kernel_NS(X_ground: Matrix, X_master: Matrix, metric: str = "euclidean") -> Matrix:
@@ -279,36 +278,34 @@ def create_kernel_NS(X_ground: Matrix, X_master: Matrix, metric: str = "euclidea
                 raise ValueError("Unsupported metric for kernel computation in Python")
     return k_dense
 
+    
 # Create square kernel function
-def create_square_kernel_dense(X_ground: Matrix, metric: str = "euclidean") -> Matrix:
+def create_square_kernel_dense(X_ground, metric: str = "euclidean", batch_size: int = 100) -> Matrix:
     n_ground = len(X_ground)
-    k_dense = [[0] * n_ground for _ in range(n_ground)]
+    k_dense = torch.zeros(n_ground, n_ground)
 
     if metric == "euclidean":
-        for r in range(n_ground):
-            k_dense[r][r] = 1.0
-            for c in range(r + 1, n_ground):
-                sim = euclidean_similarity(X_ground[r], X_ground[c])
-                k_dense[r][c] = sim
-                k_dense[c][r] = sim
+        # Euclidean distance
+        X_ground_norm = torch.norm(X_ground, dim=1, keepdim=True)
+        for i in range(0, n_ground, batch_size):
+            X_batch = X_ground[i:i+batch_size]
+            distances = torch.cdist(X_batch, X_ground, p=2)
+            k_dense[i:i+batch_size] = torch.exp(-distances.pow(2))
     elif metric == "cosine":
-        for r in range(n_ground):
-            a_norm = sqrt(dot_prod(X_ground[r], X_ground[r]))
-            k_dense[r][r] = 1.0
-            for c in range(r + 1, n_ground):
-                sim = dot_prod(X_ground[r], X_ground[c])
-                b_norm = sqrt(dot_prod(X_ground[c], X_ground[c]))
-                sim = sim / (a_norm * b_norm) if a_norm * b_norm > 0 else 0
-                k_dense[r][c] = sim
-                k_dense[c][r] = sim
+        # Cosine similarity
+        X_ground_norm = torch.norm(X_ground, dim=1, keepdim=True)
+        for i in range(0, n_ground, batch_size):
+            X_batch = X_ground[i:i+batch_size]
+            dot_products = torch.mm(X_batch, X_ground.t())
+            k_dense[i:i+batch_size] = dot_products / torch.mm(torch.norm(X_batch, dim=1, keepdim=True), X_ground_norm.t())
     elif metric == "dot":
-        for r in range(n_ground):
-            for c in range(r, n_ground):
-                sim = dot_prod(X_ground[r], X_ground[c])
-                k_dense[r][c] = sim
-                k_dense[c][r] = sim
+        # Dot product
+        for i in range(0, n_ground, batch_size):
+            X_batch = X_ground[i:i+batch_size]
+            k_dense[i:i+batch_size] = torch.mm(X_batch, X_ground.t())
     else:
-        raise ValueError("Unsupported metric for kernel computation in Python")
+        raise ValueError("Unsupported metric for kernel computation")
+
     return k_dense
 
 # Set intersection function
