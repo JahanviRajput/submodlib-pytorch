@@ -315,7 +315,7 @@ def set_intersection(a: Set, b: Set) -> Set:
     return list(set(a) & set(b))  # Converting set intersection to list for better compatibility
 
 # Helper function for dense mode Disparity Sum
-def get_sum_dense(dataset_ind: Set[int], obj: DisparitySum_imp) -> float:
+def get_sum_dense(dataset_ind: Set[int], obj) -> float:
 	sum = 0.0
 	for elem1 in dataset_ind:
 			for elem2 in dataset_ind:
@@ -323,7 +323,7 @@ def get_sum_dense(dataset_ind: Set[int], obj: DisparitySum_imp) -> float:
 	return sum/2
 
 # Helper function for sparse mode Disparity Sum
-def get_sum_sparse(dataset_ind: Set[int], obj: DisparitySum_imp) -> float:
+def get_sum_sparse(dataset_ind: Set[int], obj) -> float:
 	sum = 0.0
 	for elem1 in dataset_ind:
 			for elem2 in dataset_ind:
@@ -331,3 +331,20 @@ def get_sum_sparse(dataset_ind: Set[int], obj: DisparitySum_imp) -> float:
 	return sum/2
 
 
+# Helper function for dense mode Disparity Min
+def get_min_dense(dataset_ind: Set[int], obj) -> float:
+	min_val = 1.0
+	for elem1 in dataset_ind:
+			for elem2 in dataset_ind:
+					if elem1 != elem2 and 1 - obj.cpp_sijs[elem1][elem2] < min_val:
+							min_val = 1 - obj.cpp_sijs[elem1][elem2]
+	return min_val
+
+# Helper function for sparse mode Disparity Min
+def get_min_sparse(dataset_ind: Set[int], obj) -> float:
+	min_val = 1.0
+	for elem1 in dataset_ind:
+			for elem2 in dataset_ind:
+					if elem1 != elem2 and 1 - obj.sparse_kernel.get_val(elem1, elem2) < min_val:
+							min_val = 1 - obj.sparse_kernel.get_val(elem1, elem2)
+	return min_val
