@@ -4,11 +4,11 @@ from helper import *
 from ..SetFunction import SetFunction
 
 class GraphCutFunction(SetFunction):
-    def __init__(self, n, mode, lambdaVal, separate_rep=None, n_rep=None, mgsijs=None, ggsijs=None, data=None, data_rep=None, metric="cosine", num_neighbors=None,
+    def __init__(self, n, mode, lambdaVal, separate_rep=None, n_rep=None, mgsijs=None, ggsijs=None, data=None, data_rep=None, metric="cosine", num_neighbors=None,batch_size=0,
                  master_ground_kernel: List[List[float]] = None,
                  ground_ground_kernel: List[List[float]] = None, arr_val: List[float] = None,
                  arr_count: List[int] = None, arr_col: List[int] = None, partial: bool = False,
-                 ground: Set[int] = None):
+                 ground: Set[int] = None, batch_size = 100):
         super(SetFunction, self).__init__()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.n = n
@@ -32,6 +32,7 @@ class GraphCutFunction(SetFunction):
         self.mgsijs = None
         self.content = None
         self.effective_ground = None
+        self.batch_size= batch_size
 
         if self.n <= 0:
           raise Exception("ERROR: Number of elements in ground set must be positive")
@@ -100,10 +101,24 @@ class GraphCutFunction(SetFunction):
                 if self.num_neighbors is not None:
                   raise Exception("num_neighbors wrongly provided for dense mode")
                 self.num_neighbors = np.shape(self.data)[0] #Using all data as num_neighbors in case of dense mode
-                self.content = np.array(create_kernel(X = torch.tensor(self.data), metric = self.metric, num_neigh = self.num_neighbors).to_dense())
-                val = self.cpp_content[0]
-                row = list(self.cpp_content[1].astype(int))
-                col = list(self.cpp_content[2].astype(int))
+                self.data = map(np.ndarray.tolist,self.data)
+                self.data = list(self.data)
+
+                #print(self.num_neighbors)
+                #self.cpp_content = np.array(create_kernel(X = torch.tensor(self.data,device="cuda"), metric = self.metric, num_neigh = self.num_neighbors, mode = self.mode).to_dense())
+
+                y = torch.tensor(self.data)
+                z = y.to(device="cuda")
+                x= create_kernel(X=z, metric=self.metric, num_neigh=self.num_neighbors, mode=self.mode, batch=self.batch_size)
+                # print("type x",type(x))
+                #self.cpp_content = np.array(create_kernel(X=torch.tensor(self.data, device="cuda").cpu(), metric=self.metric, num_neigh=self.num_neighbors, mode=self.mode).to_dense())
+                #val = self.cpp_content[0]
+                val = x[0].cpu().detach().numpy()
+                #print("val type", val.shape)
+                row = list(x[1].cpu().detach().numpy().astype(int))
+                #row = list(self.cpp_content[1].astype(int))
+                #print("row type", type(row))
+                col = list(x[2].cpu().detach().numpy().astype(int))
                 self.ggsijs = np.zeros((n,n))
                 self.ggsijs[row,col] = val
               else:
@@ -119,10 +134,24 @@ class GraphCutFunction(SetFunction):
                 if self.num_neighbors is not None:
                   raise Exception("num_neighbors wrongly provided for dense mode")
                 self.num_neighbors = np.shape(self.data)[0] #Using all data as num_neighbors in case of dense mode
-                self.content = np.array(create_kernel(X = torch.tensor(self.data), metric = self.metric, num_neigh = self.num_neighbors).to_dense())
-                val = self.content[0]
-                row = list(self.content[1].astype(int))
-                col = list(self.content[2].astype(int))
+                self.data = map(np.ndarray.tolist,self.data)
+                self.data = list(self.data)
+
+                #print(self.num_neighbors)
+                #self.cpp_content = np.array(create_kernel(X = torch.tensor(self.data,device="cuda"), metric = self.metric, num_neigh = self.num_neighbors, mode = self.mode).to_dense())
+
+                y = torch.tensor(self.data)
+                z = y.to(device="cuda")
+                x= create_kernel(X=z, metric=self.metric, num_neigh=self.num_neighbors, mode=self.mode, batch=self.batch_size)
+                # print("type x",type(x))
+                #self.cpp_content = np.array(create_kernel(X=torch.tensor(self.data, device="cuda").cpu(), metric=self.metric, num_neigh=self.num_neighbors, mode=self.mode).to_dense())
+                #val = self.cpp_content[0]
+                val = x[0].cpu().detach().numpy()
+                #print("val type", val.shape)
+                row = list(x[1].cpu().detach().numpy().astype(int))
+                #row = list(self.cpp_content[1].astype(int))
+                #print("row type", type(row))
+                col = list(x[2].cpu().detach().numpy().astype(int))
                 self.ggsijs = np.zeros((n,n))
                 self.ggsijs[row,col] = val
               elif (type(self.ggsijs) == type(None)) and (type(self.mgsijs) != type(None)):
@@ -210,32 +239,6 @@ class GraphCutFunction(SetFunction):
 
         self.effective_ground = self.get_effective_ground_set()
 
-        # if mode == "dense":
-
-        # elif mode == "sparse":
-        #     if not arr_val or not arr_count or not arr_col:
-        #         raise ValueError("Error: Empty/Corrupt sparse similarity kernel")
-
-        #     self.sparse_kernel = SparseSim(arr_val, arr_count, arr_col)
-
-        #     self.effective_ground_set = set(range(n))
-        #     self.num_effective_ground_set = len(self.effective_ground_set)
-
-        #     self.n_master = self.num_effective_ground_set
-        #     self.master_set = self.effective_ground_set
-
-        #     self.total_similarity_with_subset = [0] * n
-        #     self.total_similarity_with_master = [0] * n
-
-        #     for i in range(n):
-        #         self.total_similarity_with_subset[i] = 0
-        #         self.total_similarity_with_master[i] = 0
-
-        #         for j in range(n):
-        #             self.total_similarity_with_master[i] += self.sparse_kernel.get_val(j, i)
-
-        # else:
-        #     raise ValueError("Invalid mode")
 
     def evaluate(self, X: Set[int]) -> float:
         effective_x = X.intersection(self.effective_ground_set) if self.partial else X
@@ -296,29 +299,6 @@ class GraphCutFunction(SetFunction):
                 gain -= 2 * self.lambda_ * self.sparse_kernel.get_val(item, elem)
             gain -= self.lambda_ * self.sparse_kernel.get_val(item, item)
         return gain
-
-    # def marginal_gain_with_memoization(self, X: Set[int], item: int, enable_checks: bool = True) -> float:
-    #     effective_x = X.intersection(self.effective_ground_set) if self.partial else X
-
-    #     if enable_checks and item in effective_x:
-    #         return 0
-
-    #     if self.partial and item not in self.effective_ground_set:
-    #         return 0
-
-    #     gain = 0
-
-    #     if self.mode == "dense":
-    #         index = self.original_to_partial_index_map[item] if self.partial else item
-    #         gain = self.total_similarity_with_master[index] - 2 * self.lambda_ * self.total_similarity_with_subset[index]
-    #         gain = self.total_similarity_with_master[index] - 2 * self.lambda_ * self.total_similarity_with_subset[index] - self.lambda_ * self.ground_ground_kernel[item][item]
-
-    #     elif self.mode == "sparse":
-    #         index = self.original_to_partial_index_map[item] if self.partial else item
-    #         gain = self.total_similarity_with_master[index] - 2 * self.lambda_ * self.total_similarity_with_subset[index] - self.lambda_ * self.sparse_kernel.get_val(item, item)
-
-    #     return gain
-
 
     def marginal_gain_with_memoization(self, X: Set[int], item: int, enable_checks: bool) -> float:
         effective_X = set()
