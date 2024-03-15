@@ -44,11 +44,7 @@ def create_sparse_kernel(X, metric, num_neigh, n_jobs=1, method="sklearn"):
     dense_ = None
     if num_neigh == -1:
         num_neigh = X.shape[0]  # default is the total number of datapoints
-
-    # Assuming X is a PyTorch tensor
     X_np = X.numpy()
-
-    # Use PyTorch functions for the nearest neighbors search
     if metric == 'euclidean':
       distances = torch.cdist(X, X, p=2)  # Euclidean distance
     elif metric == 'cosine':
@@ -317,4 +313,21 @@ def create_square_kernel_dense(X_ground, metric: str = "euclidean", batch_size: 
 # Set intersection function
 def set_intersection(a: Set, b: Set) -> Set:
     return list(set(a) & set(b))  # Converting set intersection to list for better compatibility
+
+# Helper function for dense mode Disparity Sum
+def get_sum_dense(dataset_ind: Set[int], obj: DisparitySum_imp) -> float:
+	sum = 0.0
+	for elem1 in dataset_ind:
+			for elem2 in dataset_ind:
+				sum += (1 - obj.cpp_sijs[elem1][elem2])
+	return sum/2
+
+# Helper function for sparse mode Disparity Sum
+def get_sum_sparse(dataset_ind: Set[int], obj: DisparitySum_imp) -> float:
+	sum = 0.0
+	for elem1 in dataset_ind:
+			for elem2 in dataset_ind:
+				sum += (1 - obj.sparsekernel.get_val(elem1, elem2))
+	return sum/2
+
 
