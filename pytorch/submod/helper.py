@@ -93,8 +93,6 @@ def create_kernel_dense_sklearn(X, metric, X_rep=None, batch=0):
     batch_size = batch
     if metric == "euclidean":
         if X_rep is None:
-            # print(X.shape)
-            # Process data in batches for torch.cdist
             for i in range(0, len(X), batch_size):
                 X_batch = X[i:i+batch_size].to(device="cuda")
                 # print(X_batch.shape)
@@ -173,7 +171,7 @@ def create_kernel_dense_sklearn(X, metric, X_rep=None, batch=0):
 
     torch.cuda.empty_cache()
     return dense
-
+    
 def create_cluster_kernels(X, metric, cluster_lab=None, num_cluster=None, onlyClusters=False):
     lab = []
     if cluster_lab is None:
@@ -226,15 +224,16 @@ def create_cluster_kernels(X, metric, cluster_lab=None, num_cluster=None, onlyCl
             
     return l_cluster, l_kernel, l_ind
 
-def create_kernel(X, metric, mode="dense", num_neigh=-1, n_jobs=1, X_rep=None, method="sklearn"):
+
+def create_kernel(X, metric, mode="dense", num_neigh=-1, n_jobs=1, X_rep=None, method="sklearn", batch=0):
 
     if X_rep is not None:
         assert X_rep.shape[1] == X.shape[1]
 
     if mode == "dense":
         dense = None
-        dense = globals()['create_kernel_dense_'+method](X, metric, X_rep)
-        return torch.tensor(dense)
+        dense = globals()['create_kernel_dense_'+method](X, metric, X_rep, batch)
+        return dense.clone().detach()
 
     elif mode == "sparse":
         if X_rep is not None:
@@ -261,21 +260,28 @@ def dot_prod(a:Vector, b: Vector) -> float:
     return torch.dot(a, b)
 
 # Create kernel function for non-square kernel
-def create_kernel_NS(X_ground: Matrix, X_master: Matrix, metric: str = "euclidean") -> Matrix:
+def create_kernel_NS(X_ground, X_master, metric: str = "euclidean", batch = 0):
+    print("NS started")
     n_ground = len(X_ground)
     n_master = len(X_master)
-    k_dense = [[0] * n_ground for _ in range(n_master)]
-
-    for r in range(n_master):
-        for c in range(n_ground):
+    k_dense = torch.zeros(n_master, n_ground)
+    print("n_master",n_master)
+    batch_size = batch
+    for r in range(0, n_master, batch_size):
+        #print(r)
+        X_master_batch = X_master[r:r+batch_size]
+        for c in range(0, n_ground, batch_size):
+            X_ground_batch = X_ground[c:c+batch_size]
             if metric == "euclidean":
-                k_dense[r][c] = euclidean_similarity(X_master[r], X_ground[c])
+                sim_batch = euclidean_similarity(X_master_batch, X_ground_batch)
             elif metric == "cosine":
-                k_dense[r][c] = cosine_similarity(X_master[r], X_ground[c])
+                sim_batch = cosine_similarity(X_master_batch, X_ground_batch)
             elif metric == "dot":
-                k_dense[r][c] = dot_prod(X_master[r], X_ground[c])
+                sim_batch = dot_prod(X_master_batch, X_ground_batch)
             else:
                 raise ValueError("Unsupported metric for kernel computation in Python")
+            k_dense[r:r+sim_batch.size(0), c:c+sim_batch.size(1)] = sim_batch
+
     return k_dense
 
     
