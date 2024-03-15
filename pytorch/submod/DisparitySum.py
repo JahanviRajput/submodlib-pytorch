@@ -7,10 +7,10 @@ import torch.nn as nn
 import random
 from ..SetFunction import SetFunction
 
-class DisparitySum_imp(SetFunction):
+class DisparitySumFunction(SetFunction):
 
 	def __init__(self, n, mode, sijs=None, data=None, metric="cosine", num_neighbors=None,batch_size=0):
-		super(DisparitySum_imp, self).__init__()
+		super(DisparitySumFunction, self).__init__()
 		self.n = n
 		self.mode = mode
 		self.metric = metric
