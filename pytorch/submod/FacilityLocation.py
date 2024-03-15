@@ -3,11 +3,11 @@ import scipy
 from scipy import sparse
 from helper import *
 from ..SetFunction import SetFunction
-
+                     
 class FacilityLocationFunction(SetFunction):
     def __init__(self, n, mode, separate_rep=None, n_rep=None, sijs=None, data=None, data_rep=None, num_clusters=None, cluster_labels=None, metric="cosine", num_neighbors=None,
                  dense_kernel = None, data_master = None, create_dense_cpp_kernel_in_python = True, partial = False, seperate_master = False):
-        self.n = n
+                self.n = n
         self.n_rep = n_rep
         self.mode = mode
         self.metric = metric
@@ -123,7 +123,6 @@ class FacilityLocationFunction(SetFunction):
             self.cpp_sijs["arr_val"] = self.sijs.data.tolist()
             self.cpp_sijs["arr_count"] = self.sijs.indptr.tolist()
             self.cpp_sijs["arr_col"] = self.sijs.indices.tolist()
-            # self.cpp_obj = FacilityLocation(self.n, self.cpp_sijs["arr_val"], self.cpp_sijs["arr_count"], self.cpp_sijs["arr_col"])
         elif self.mode == "clustered":
             l_temp = []
             for el in self.cluster_sijs:
@@ -134,21 +133,18 @@ class FacilityLocationFunction(SetFunction):
                     temp = l
                 l_temp.append(temp)
             self.cluster_sijs = l_temp
-
-
         if self.mode == 'dense':
           if self.dense_kernel == None:
-            self.dense_constructor_no_kernel(n = self.n, data = self.data, data_master = self.data_master) ## dense mode with no dense_kernel
+            self.dense_constructor_no_kernel(n = self.n, data = self.data, data_master = self.data_master, metric=self.metric) ## dense mode with no dense_kernel
           elif self.dense_kernel != None:
             self.dense_constructor(n = self.n, dense_kernel = self.dense_kernel, ground = self.data, partial = self.partial, separate_master = self.separate_master) ## dense mode with dense_kernel
         ### other modes are remaining
         elif self.mode == 'sparse':
-          pass
+          self.sparse_constructor(n = self.n, arr_val = self.cpp_sijs["arr_val"], arr_count = self.cpp_sijs["arr_count"], arr_col = self.cpp_sijs["arr_col"])
         elif self.mode == 'clustered':
           pass
 
         self.effective_ground = self.get_effective_ground_set()
-
 
     def dense_constructor(self, n, dense_kernel, partial = False, ground = None, separate_master = False):
         self.n = n
@@ -181,7 +177,17 @@ class FacilityLocationFunction(SetFunction):
         if separate_master:
             self.dense_kernel = create_kernel_NS(data, data_master, metric)
         else:
-            self.dense_kernel = create_square_kernel_dense(data, metric)
+            #print("dense")
+            data = map(np.ndarray.tolist,self.data)
+            data = list(data)
+
+            y = torch.tensor(data)
+            z = y.to(device="cuda")
+            #print(y.shape)
+            #print("dense over")
+            # Transfer the concatenated tensor to the GPU
+            self.dense_kernel = create_square_kernel_dense(z, metric)
+
 
         self.mode = 'dense'
         self.partial = False
@@ -207,8 +213,8 @@ class FacilityLocationFunction(SetFunction):
         self.mode = 'sparse'
         self.partial = False
         self.separate_master = False
-
-        self.sparse_kernel = self.SparseSim(arr_val, arr_count, arr_col)
+        obj_sparse = SparseSim(arr_val, arr_count, arr_col)
+        self.sparse_kernel = obj_sparse
 
         self.effective_ground_set = set(range(n))
         self.num_effective_groundset = n
@@ -266,6 +272,7 @@ class FacilityLocationFunction(SetFunction):
 
         return result
 
+
     def evaluate_with_memoization(self, X):
         effective_X = X.intersection(self.effective_ground_set) if self.partial else X
         result = 0
@@ -288,7 +295,7 @@ class FacilityLocationFunction(SetFunction):
 
         if item not in effective_X:
             if self.mode == 'dense':
-                print(self.master_set)
+                #print(self.master_set)
                 for ind in self.master_set:
                     m = self.get_max_sim_dense(ind, effective_X)
                     if self.dense_kernel[item][ind] > m:
@@ -310,35 +317,38 @@ class FacilityLocationFunction(SetFunction):
                     gain += m - self.clustered_similarity_with_nearest_in_relevant_x[ind]
 
         return gain
-    def marginal_gain_with_memoization(self, X, item, enable_checks):
-      effective_X = set()
-      gain = 0
 
-      if self.partial:
-          effective_X = X.intersection(self.effective_ground_set)
-      else:
-          effective_X = X
+    def marginal_gain_with_memoization(self, X, R, enable_checks: bool = True): #R is item here
+        effective_X = set()
+        if self.partial:
+            effective_X = X.intersection(self.effective_ground_set)
+        else:
+            effective_X = X
 
-      if enable_checks and item in effective_X:
-          return 0
+        if enable_checks:
+            R_set = set(R)
+            if R_set.intersection(effective_X):
+                return 0
 
-      if self.partial and item not in self.effective_ground_set:
-          return 0
+        if self.partial:
+            R = [item for item in R if item in self.effective_ground_set]
 
-      if self.mode == 'dense':
-          for ind in self.master_set:
-              if self.partial:
-                  if self.dense_kernel[ind][item] > self.similarity_with_nearest_in_effective_x[self.original_to_partial_index_map[ind]]:
-                      gain += self.dense_kernel[ind][item] - self.similarity_with_nearest_in_effective_x[self.original_to_partial_index_map[ind]]
-              else:
-                  if self.dense_kernel[ind][item] > self.similarity_with_nearest_in_effective_x[ind]:
-                      gain += self.dense_kernel[ind][item] - self.similarity_with_nearest_in_effective_x[ind]
-      elif self.mode == 'sparse':
+        gains = torch.zeros(R.shape).to(device="cuda")
+        if self.mode == 'dense':
+            for ind in self.master_set:
+                if self.partial:
+                    gains += torch.tensor(self.dense_kernel[ind][R]) - torch.tensor(self.similarity_with_nearest_in_effective_x[self.original_to_partial_index_map[ind]])
+                else:
+                    gains += self.dense_kernel[ind][R] - self.similarity_with_nearest_in_effective_x[ind]
+
+            max_gain_index = R[torch.argmax(gains)]
+        # sparse kernel and clustered is not done
+        elif self.mode == 'sparse':
           for ind in self.master_set:
               temp = self.sparse_kernel[ind, item]
               if temp > self.similarity_with_nearest_in_effective_x[ind]:
                   gain += temp - self.similarity_with_nearest_in_effective_x[ind]
-      else:  # clustered
+        else:  # clustered
           i = self.cluster_ids[item]
           item_ = self.cluster_index_map[item]
           relevant_subset = self.relevant_x[i]
@@ -354,7 +364,7 @@ class FacilityLocationFunction(SetFunction):
                   if self.cluster_kernels[i][ind_][item_] > self.clustered_similarity_with_nearest_in_relevant_x[ind]:
                       gain += self.cluster_kernels[i][ind_][item_] - self.clustered_similarity_with_nearest_in_relevant_x[ind]
 
-      return gain
+        return max_gain_index   
 
 
     def update_memoization(self, X, item):
@@ -372,13 +382,9 @@ class FacilityLocationFunction(SetFunction):
             return
 
         if self.mode == 'dense':
-            for ind in self.master_set:
-                if self.partial:
-                    if self.dense_kernel[ind][item] > self.similarity_with_nearest_in_effective_x[self.original_to_partial_index_map[ind]]:
-                        self.similarity_with_nearest_in_effective_x[self.original_to_partial_index_map[ind]] = self.dense_kernel[ind][item]
-                else:
-                    if self.dense_kernel[ind][item] > self.similarity_with_nearest_in_effective_x[ind]:
-                        self.similarity_with_nearest_in_effective_x[ind] = self.dense_kernel[ind][item]
+                    for ind in self.master_set:
+                        if self.dense_kernel[ind][item] > self.similarity_with_nearest_in_effective_x[ind]:
+                            self.similarity_with_nearest_in_effective_x[ind] = self.dense_kernel[ind][item]
         elif self.mode == 'sparse':
             for ind in self.master_set:
                 temp_val = self.sparse_kernel[ind, item]
@@ -393,13 +399,11 @@ class FacilityLocationFunction(SetFunction):
                 ind_ = self.cluster_index_map[ind]
                 if self.cluster_kernels[i][ind_][item_] > self.clustered_similarity_with_nearest_in_relevant_x[ind]:
                     self.clustered_similarity_with_nearest_in_relevant_x[ind] = self.cluster_kernels[i][ind_][item_]
-
             self.relevant_x[i].add(item)
 
 
     def get_effective_ground_set(self):
         return set(range(self.n))
-
 
     def cluster_init(self, n_, dense_kernel_, ground_, partial, lambda_):
         self.n = n_
@@ -414,14 +418,12 @@ class FacilityLocationFunction(SetFunction):
         self.clustered_similarity_with_nearest_in_relevant_x = np.zeros(n_)
         self.relevant_x = [set() for _ in range(n_)]
 
-
     def clear_memoization(self):
         if self.mode == 'dense' or self.mode == 'sparse':
             self.similarity_with_nearest_in_effective_x = np.zeros(self.n_master)
         else:
             self.relevant_x = [set() for _ in range(self.num_clusters)]
             self.clustered_similarity_with_nearest_in_relevant_x = np.zeros(self.n)
-
 
     def set_memoization(self, X):
         self.clear_memoization()
