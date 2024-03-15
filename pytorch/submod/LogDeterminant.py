@@ -10,8 +10,9 @@ class LogDeterminantFunction(SetFunction):
         return sum(xi * yi for xi, yi in zip(x, y))
 
 
-    def __init__(self, n, mode, lambdaVal, arr_val=None, arr_count=None, arr_col=None, dense_kernel=None, partial=None,
+    def __init__(self, n, mode, lambdaVal, arr_val=None, arr_count=None, arr_col=None, dense_kernel=None,batch_size=0, partial=None,
                   sijs=None, data=None, metric="cosine", num_neighbors=None, memoizedC = None, memoizedD = None, data_master = None):
+        super(LogDeterminant, self).__init__()
         self.n = n
         self.mode = mode
         self.metric = metric
@@ -28,6 +29,7 @@ class LogDeterminantFunction(SetFunction):
         self.memoizedD = memoizedD
         self.data_master = data_master
         self.dense_kernel = dense_kernel
+        self.batch_size=batch_size
 
         if self.n <= 0:
           raise Exception("ERROR: Number of elements in ground set must be positive")
@@ -62,10 +64,27 @@ class LogDeterminantFunction(SetFunction):
               if self.num_neighbors  is not None:
                 raise Exception("num_neighbors wrongly provided for dense mode")
               self.num_neighbors = np.shape(self.data)[0] #Using all data as num_neighbors in case of dense mode
-            self.content = np.array(create_kernel( X = self.data.tolist(), metric = self.metric, mode = self.mode, num_neigh = self.num_neighbors))
-            val = self.content[0]
-            row = list(self.content[1].astype(int))
-            col = list(self.content[2].astype(int))
+
+            #control
+            print("check 1")
+            self.data = map(np.ndarray.tolist,self.data)
+            self.data = list(self.data)
+
+            #print(self.num_neighbors)
+            #self.cpp_content = np.array(create_kernel(X = torch.tensor(self.data,device="cuda"), metric = self.metric, num_neigh = self.num_neighbors, mode = self.mode).to_dense())
+
+            y = torch.tensor(self.data)
+            z = y.to(device="cuda")
+            x= create_kernel(X=z, metric=self.metric, num_neigh=self.num_neighbors, mode=self.mode, batch=self.batch_size)
+            # print("type x",type(x))
+            #self.cpp_content = np.array(create_kernel(X=torch.tensor(self.data, device="cuda").cpu(), metric=self.metric, num_neigh=self.num_neighbors, mode=self.mode).to_dense())
+            #val = self.cpp_content[0]
+            val = x[0].cpu().detach().numpy()
+            #print("val type", val.shape)
+            row = list(x[1].cpu().detach().numpy().astype(int))
+            #row = list(self.cpp_content[1].astype(int))
+            #print("row type", type(row))
+            col = list(x[2].cpu().detach().numpy().astype(int))
             if self.mode=="dense":
               self.sijs = np.zeros((n,n))
               self.sijs[row,col] = val
@@ -88,7 +107,18 @@ class LogDeterminantFunction(SetFunction):
         self.effective_ground = self.get_effective_ground_set()
         if self.mode == 'dense':
           if self.dense_kernel == None:
-             self.dense_kernel = create_kernel_NS(X_ground = self.data, X_master = self.data, metric = self.metric)
+             #control 2
+             print("check 2")
+
+
+
+            #print(self.num_neighbors)
+            #self.cpp_content = np.array(create_kernel(X = torch.tensor(self.data,device="cuda"), metric = self.metric, num_neigh = self.num_neighbors, mode = self.mode).to_dense())
+
+             y = torch.tensor(self.data)
+             z = y.to(device="cuda")
+
+             self.dense_kernel = create_kernel_NS(X_ground = z, X_master = z, metric = self.metric, batch = self.batch_size)
           if self.partial:
             self.effectiveGroundSet = self.data
           else:
