@@ -1,14 +1,18 @@
-from typing import List, Set
+from typing import List
 import random
-from helper import *
+from .helper import *
 from ..SetFunction import SetFunction
 
 class GraphCutFunction(SetFunction):
-    def __init__(self, n, mode, lambdaVal, separate_rep=None, n_rep=None, mgsijs=None, ggsijs=None, data=None, data_rep=None, metric="cosine", num_neighbors=None,batch_size=0,
+    def __init__(self, n, mode, lambdaVal, 
+                 separate_rep=None, n_rep=None, 
+                 mgsijs=None, ggsijs=None, 
+                 data=None, data_rep=None, 
+                 metric="cosine", num_neighbors=None,
                  master_ground_kernel: List[List[float]] = None,
                  ground_ground_kernel: List[List[float]] = None, arr_val: List[float] = None,
                  arr_count: List[int] = None, arr_col: List[int] = None, partial: bool = False,
-                 ground: Set[int] = None, batch_size = 100):
+                 ground: set[int] = None, batch_size = 100):
         super(SetFunction, self).__init__()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.n = n
@@ -240,7 +244,7 @@ class GraphCutFunction(SetFunction):
         self.effective_ground = self.get_effective_ground_set()
 
 
-    def evaluate(self, X: Set[int]) -> float:
+    def evaluate(self, X: Set) -> float:
         effective_x = X.intersection(self.effective_ground_set) if self.partial else X
 
         if not effective_x:
@@ -266,7 +270,7 @@ class GraphCutFunction(SetFunction):
 
         return result
 
-    def evaluate_with_memoization(self, X: Set[int]) -> float:
+    def evaluate_with_memoization(self, X: Set) -> float:
         effective_x = X.intersection(self.effective_ground_set) if self.partial else X
 
         if not effective_x:
@@ -281,7 +285,7 @@ class GraphCutFunction(SetFunction):
 
         return result
 
-    def marginal_gain(self, X: Set[int], item: int) -> float:
+    def marginal_gain(self, X: Set, item: int) -> float:
         effective_x = X.intersection(self.effective_ground_set) if self.partial else X
 
         if item in effective_x or item not in self.effective_ground_set:
@@ -300,7 +304,7 @@ class GraphCutFunction(SetFunction):
             gain -= self.lambda_ * self.sparse_kernel.get_val(item, item)
         return gain
 
-    def marginal_gain_with_memoization(self, X: Set[int], item: int, enable_checks: bool) -> float:
+    def marginal_gain_with_memoization(self, X: Set, item: int, enable_checks: bool) -> float:
         effective_X = set()
         gain = 0
         if self.partial:
@@ -328,7 +332,7 @@ class GraphCutFunction(SetFunction):
         return gain
 
 
-    def update_memoization(self, X: Set[int], item: int):
+    def update_memoization(self, X: Set, item: int):
         effective_x = X.intersection(self.effective_ground_set) if self.partial else X
 
         if item in effective_x or item not in self.effective_ground_set:
@@ -344,14 +348,14 @@ class GraphCutFunction(SetFunction):
                 index = self.original_to_partial_index_map[elem] if self.partial else elem
                 self.total_similarity_with_subset[index] += self.sparse_kernel.get_val(elem, item)
 
-    def get_effective_ground_set(self) -> Set[int]:
+    def get_effective_ground_set(self) -> Set:
         return self.effective_ground_set
 
     def clear_memoization(self):
         if self.mode == "dense" or self.mode == "sparse":
             self.total_similarity_with_subset = [0] * self.num_effective_ground_set
 
-    def set_memoization(self, X: Set[int]):
+    def set_memoization(self, X: Set):
         temp = set()
         for elem in X:
             self.update_memoization(temp, elem)

@@ -1,7 +1,7 @@
 import math
 from collections import defaultdict
 import scipy
-from helper import *
+from .helper import *
 from ..SetFunction import SetFunction
 
 class LogDeterminantFunction(SetFunction):

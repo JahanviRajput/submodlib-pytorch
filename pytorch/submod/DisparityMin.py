@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
-from helper import *
-from typing import Set
+from .helper import *
+# from typing import Set
 import torch
 from ..SetFunction import SetFunction
 
@@ -99,7 +99,7 @@ class DisparityMinFunction(SetFunction):
 			self.numeffectivegroundset = len(self.effective_ground_set)
 			self.currentMin = 0
 
-	def evaluate(self, X: Set[int]) -> float:
+	def evaluate(self, X: Set) -> float:
 		effective_X = X
 		if len(effective_X) == 0 or len(effective_X) == 1:
 			return 0.0
@@ -110,95 +110,93 @@ class DisparityMinFunction(SetFunction):
 		else:
 			raise ValueError("Error: Only dense and sparse mode supported")
 
-	def evaluate_with_memoization(self, X: Set[int]) -> float:
+	def evaluate_with_memoization(self, X: Set) -> float:
 		return self.currentMin
 
-	def get_effective_ground_set(self) -> Set[int]:
+	def get_effective_ground_set(self) -> Set:
 		return self.effective_ground_set
 
-	def marginal_gain(self, X: Set[int], item: int) -> float:
-			effective_X = X
+	def marginal_gain(self, X: Set, item: int) -> float:
+		effective_X = X
 
-			if item in effective_X:
-					return 0.0
+		if item in effective_X:
+			return 0.0
 
-			if item not in self.effective_ground_set:
-					return 0.0
+		if item not in self.effective_ground_set:
+			return 0.0
 
-			min_val = 1.0 if len(effective_X) == 1 else self.currentMin
+		min_val = 1.0 if len(effective_X) == 1 else self.currentMin
 
+		if self.mode == 'dense':
+			for elem in effective_X:
+				if 1 - self.cpp_sijs[elem][item] < min_val and elem != item:
+					min_val = 1 - self.cpp_sijs[elem][item]
+		elif self.mode == 'sparse':
+			for elem in effective_X:
+				if 1 - self.sparse_kernel.get_val(elem, item) < min_val and elem != item:
+					min_val = 1 - self.sparse_kernel.get_val(elem, item)
+		else:
+			raise ValueError("Error: Only dense and sparse mode supported")
+
+		return min_val - self.currentMin
+
+	def marginal_gain_with_memoization(self, X: Set, item: int, enable_checks: bool = True) -> float:
+		effective_X = X
+
+		if enable_checks and item in effective_X:
+				return 0.0
+
+		# if False and item not in self.effective_ground_set:
+		# 		return 0.0
+
+		min_val = 1.0 if len(effective_X) == 1 else self.currentMin
+
+		if self.mode == 'dense':
+			for elem in effective_X:
+				if 1 - self.cpp_sijs[elem][item] < min_val and elem != item:
+					min_val = 1 - self.cpp_sijs[elem][item]
+		elif self.mode == 'sparse':
+			for elem in effective_X:
+				if 1-self.sparse_kernel.get_val(item, elem) and elem!=item:
+					min = 1-self.sparse_kernel.get_val(item,elem)
+		else:
+			raise ValueError("Error: Only dense and sparse mode supported")
+
+		return min_val - self.currentMin
+
+
+	def update_memoization(self, X: Set, item: int) -> None:
+		effective_X = X
+
+		if item in effective_X:
+			return
+
+		if item not in self.effective_ground_set:
+			return
+
+		if len(effective_X) == 1:
 			if self.mode == 'dense':
-					for elem in effective_X:
-							if 1 - self.cpp_sijs[elem][item] < min_val and elem != item:
-									min_val = 1 - self.cpp_sijs[elem][item]
+				for elem in effective_X:
+					self.currentMin = 1 - self.cpp_sijs[elem][item]
 			elif self.mode == 'sparse':
-					for elem in effective_X:
-							if 1 - self.sparse_kernel.get_val(elem, item) < min_val and elem != item:
-									min_val = 1 - self.sparse_kernel.get_val(elem, item)
+				for elem in effective_X:
+					self.currentMin = 1 - self.sparse_kernel.get_val(elem, item)
 			else:
-					raise ValueError("Error: Only dense and sparse mode supported")
-
-			return min_val - self.currentMin
-
-	def marginal_gain_with_memoization(self, X: Set[int], item: int, enable_checks: bool = True) -> float:
-			effective_X = X
-
-			if enable_checks and item in effective_X:
-					return 0.0
-
-			# if False and item not in self.effective_ground_set:
-			# 		return 0.0
-
-			min_val = 1.0 if len(effective_X) == 1 else self.currentMin
-
+				raise ValueError("Error: Only dense and sparse mode supported")
+		else:
 			if self.mode == 'dense':
-					for elem in effective_X:
-							if 1 - self.cpp_sijs[elem][item] < min_val and elem != item:
-									min_val = 1 - self.cpp_sijs[elem][item]
+				for elem in effective_X:
+					if 1 - self.cpp_sijs[elem][item] < self.currentMin and elem != item:
+						self.currentMin = 1 - self.cpp_sijs[elem][item]
 			elif self.mode == 'sparse':
-					for elem in effective_X:
-							if 1-self.sparse_kernel.get_val(item, elem) and elem!=item:
-								min = 1-self.sparse_kernel.get_val(item,elem)
+				for elem in effective_X:
+					if 1 - self.sparse_kernel.get_val(elem, item) < self.currentMin and elem != item:
+						self.currentMin = 1 - self.sparse_kernel.get_val(elem, item)
 			else:
-					raise ValueError("Error: Only dense and sparse mode supported")
-
-			return min_val - self.currentMin
-
-    return gains
-
-
-	def update_memoization(self, X: Set[int], item: int) -> None:
-			effective_X = X
-
-			if item in effective_X:
-					return
-
-			if item not in self.effective_ground_set:
-					return
-
-			if len(effective_X) == 1:
-					if self.mode == 'dense':
-							for elem in effective_X:
-									self.currentMin = 1 - self.cpp_sijs[elem][item]
-					elif self.mode == 'sparse':
-							for elem in effective_X:
-									self.currentMin = 1 - self.sparse_kernel.get_val(elem, item)
-					else:
-							raise ValueError("Error: Only dense and sparse mode supported")
-			else:
-					if self.mode == 'dense':
-							for elem in effective_X:
-									if 1 - self.cpp_sijs[elem][item] < self.currentMin and elem != item:
-											self.currentMin = 1 - self.cpp_sijs[elem][item]
-					elif self.mode == 'sparse':
-							for elem in effective_X:
-									if 1 - self.sparse_kernel.get_val(elem, item) < self.currentMin and elem != item:
-											self.currentMin = 1 - self.sparse_kernel.get_val(elem, item)
-					else:
-							raise ValueError("Error: Only dense and sparse mode supported")
+				raise ValueError("Error: Only dense and sparse mode supported")
 
 	def clear_memoization(self) -> None:
-			self.currentMin = 0.0
+		self.currentMin = 0.0
 
-	def set_memoization(self, X: Set[int]) -> None:
-			self.currentMin = self.evaluate(X)
+	def set_memoization(self, X: Set) -> None:
+		self.currentMin = self.evaluate(X)

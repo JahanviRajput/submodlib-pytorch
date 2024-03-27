@@ -3,7 +3,7 @@
 from .setFunction import SetFunction
 import torch
 if torch.cuda.is_available() :
-	from pytorch.submod import SetCover
+	from pytorch.submod import SetCoverFunction as SetCover
 else:
 	from submodlib_cpp import SetCover
 

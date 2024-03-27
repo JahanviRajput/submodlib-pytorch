@@ -1,4 +1,4 @@
-from helper import *
+from .helper import *
 import numpy as np
 import scipy
 from typing import Set, List, Tuple
