@@ -8,13 +8,13 @@ import pickle
 import time
 import os
 import numpy as np
-from typing import List, Dict, Union
+from typing import Dict, Union
 from math import sqrt
 
 # Define type aliases for clarity
-Vector = List[float]
-Matrix = List[Vector]
-Set = List[int]  # Considering integer elements for simplicity
+Vector = list[float]
+Matrix = list[Vector]
+Set = list[int]  # Considering integer elements for simplicity
 
 def cos_sim_square(A):
     similarity = torch.matmul(A, A.t())
@@ -246,10 +246,7 @@ def euclidean_similarity(a: Vector, b: Vector) -> float:
 
 # Cosine similarity function
 def cosine_similarity(a: Vector, b: Vector) -> float:
-    dot_product = torch.dot(a, b)
-    norm_a = torch.norm(a)
-    norm_b = torch.norm(b)
-    return dot_product / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
+    return F.cosine_similarity(a, b, dim=-1, eps=1e-6)
 
 # Dot product function
 def dot_prod(a:Vector, b: Vector) -> float:
@@ -315,7 +312,7 @@ def set_intersection(a: Set, b: Set) -> Set:
     return list(set(a) & set(b))  # Converting set intersection to list for better compatibility
 
 # Helper function for dense mode Disparity Sum
-def get_sum_dense(dataset_ind: Set[int], obj) -> float:
+def get_sum_dense(dataset_ind: Set, obj) -> float:
 	sum = 0.0
 	for elem1 in dataset_ind:
 			for elem2 in dataset_ind:
@@ -323,7 +320,7 @@ def get_sum_dense(dataset_ind: Set[int], obj) -> float:
 	return sum/2
 
 # Helper function for sparse mode Disparity Sum
-def get_sum_sparse(dataset_ind: Set[int], obj) -> float:
+def get_sum_sparse(dataset_ind: Set, obj) -> float:
 	sum = 0.0
 	for elem1 in dataset_ind:
 			for elem2 in dataset_ind:
@@ -332,7 +329,7 @@ def get_sum_sparse(dataset_ind: Set[int], obj) -> float:
 
 
 # Helper function for dense mode Disparity Min
-def get_min_dense(dataset_ind: Set[int], obj) -> float:
+def get_min_dense(dataset_ind: Set, obj) -> float:
 	min_val = 1.0
 	for elem1 in dataset_ind:
 			for elem2 in dataset_ind:
@@ -341,7 +338,7 @@ def get_min_dense(dataset_ind: Set[int], obj) -> float:
 	return min_val
 
 # Helper function for sparse mode Disparity Min
-def get_min_sparse(dataset_ind: Set[int], obj) -> float:
+def get_min_sparse(dataset_ind: Set, obj) -> float:
 	min_val = 1.0
 	for elem1 in dataset_ind:
 			for elem2 in dataset_ind:
